@@ -61,6 +61,32 @@ A successful apply emits a machine-readable receipt:
 
 If the target changed after the agent observed it, the command exits without replacing it and emits `NEEDS_REVIEW`.
 
+## Failure receipts
+
+Failures are also machine-readable. Callers should branch on `status` and `code`, not parse the human-readable `reason` string.
+
+```json
+{
+  "status": "NEEDS_REVIEW",
+  "code": "DRIFT_DETECTED",
+  "reason": "sha256 mismatch: expected ..., observed ..."
+}
+```
+
+Current stable codes include:
+
+- `DRIFT_DETECTED`
+- `SYMLINK_TARGET`
+- `TARGET_NOT_REGULAR_FILE`
+- `TARGET_OUTSIDE_ROOT`
+- `PARENT_MISSING`
+- `INVALID_TARGET`
+- `OWNERSHIP_PRESERVATION_FAILED`
+- `READBACK_VERIFICATION_FAILED`
+- `OS_ERROR`
+
+New codes may be added in minor releases. Existing code meanings should not be silently repurposed.
+
 ## Python API
 
 ```python
@@ -88,7 +114,7 @@ This library reduces accidental lost updates and false-success reporting for coo
 - **Success is a verified state, not a tool response.**
 - **No hidden network or model calls.** The core is Python standard library only.
 - **Small trust boundary.** One file, one expected state, one atomic commit.
-- **Machine-readable outcomes.** Agent runtimes can distinguish `SUCCEEDED`, `FAILED`, and `NEEDS_REVIEW`.
+- **Machine-readable outcomes.** Agent runtimes can distinguish `SUCCEEDED`, `FAILED`, and `NEEDS_REVIEW` without parsing prose.
 
 ## Current scope
 
@@ -103,7 +129,7 @@ python -m pip install -e .
 python -m pytest
 ```
 
-The tests include target drift after the temp file is fsynced, stale hashes, symlink rejection, allowed-root enforcement, mode preservation, CLI receipts, and verified read-back.
+The tests include target drift after the temp file is fsynced, stale hashes, symlink rejection, allowed-root enforcement, mode preservation, CLI receipts, stable error codes, and verified read-back.
 
 ## License
 
