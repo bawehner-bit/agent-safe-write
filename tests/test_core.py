@@ -153,6 +153,33 @@ def test_atomic_create_if_absent_does_not_clobber_racing_creator(tmp_path: Path)
     assert target.read_bytes() in {b"writer-a", b"writer-b"}
 
 
+def test_atomic_create_eexist_branch_preserves_competing_target(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    target = tmp_path / "new.txt"
+    real_link = core.os.link
+
+    def link_after_competing_create(src: os.PathLike[str], dst: os.PathLike[str]) -> None:
+        Path(dst).write_bytes(b"competing creator")
+        real_link(src, dst)
+
+    monkeypatch.setattr(core.os, "link", link_after_competing_create)
+
+    with pytest.raises(DriftDetected, match="target appeared before atomic create") as exc_info:
+        safe_write(
+            target,
+            b"agent result",
+            expected_sha256=None,
+            allowed_root=tmp_path,
+        )
+
+    assert exc_info.value.code == "DRIFT_DETECTED"
+    assert exc_info.value.committed is False
+    assert target.read_bytes() == b"competing creator"
+    assert list(tmp_path.glob(".new.txt.*.tmp")) == []
+
+
 def test_existing_file_cannot_be_created_as_new(tmp_path: Path) -> None:
     target = tmp_path / "file.txt"
     target.write_bytes(b"exists")
