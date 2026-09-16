@@ -8,7 +8,7 @@ For replacement, the library also refuses the mutation when the target fingerpri
 
 This is **not atomic compare-and-swap** for replacement. A writer that changes the target after the final fingerprint and before `os.replace` can still be overwritten.
 
-For create-if-missing, v0.1 uses an atomic POSIX hard-link create-if-absent step. If the destination appears first, the create fails with `DRIFT_DETECTED` rather than overwriting it.
+For create-if-missing, v0.1 uses an atomic POSIX hard-link create-if-absent step. If the destination appears first, the create fails with `DRIFT_DETECTED` rather than overwriting it. This path requires hard-link support on the target filesystem. If the filesystem or mount rejects hard-link creation, v0.1 fails before committing the destination and does not fall back to weaker create semantics.
 
 ## In scope
 
@@ -30,6 +30,7 @@ For create-if-missing, v0.1 uses an atomic POSIX hard-link create-if-absent step
 - using `allowed_root` as an enforced sandbox boundary;
 - kernel or filesystem compromise;
 - network/distributed filesystems with semantics weaker than assumed by local POSIX filesystems;
+- filesystems or mounts that do not support hard links for the create-if-missing path;
 - authorization, sandboxing, or user identity;
 - semantic correctness of the new file contents;
 - cryptographic non-repudiation;
@@ -71,10 +72,12 @@ The commit point is:
 - successful destination link creation for create-if-missing; or
 - successful `os.replace` for replacement.
 
-After that point, later operations can still fail. Errors therefore carry a boolean `committed` field/property:
+After that point, later operations can still fail. `SafeWriteError` instances therefore carry a boolean `committed` property:
 
 - `committed=false`: the library did not cross its commit point;
 - `committed=true`: the target mutation occurred, but durability or read-back verification did not complete successfully.
+
+Raw `OSError` exceptions that escape the Python API occur before the commit point. The CLI normalizes operational failures into machine-readable payloads with `committed=false` or `committed=true` as appropriate.
 
 `FAILED` must therefore not be interpreted as "target unchanged" without checking `committed`.
 

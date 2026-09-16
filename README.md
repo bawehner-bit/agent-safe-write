@@ -33,7 +33,7 @@ So the replacement guarantee is narrower:
 
 > Drift visible before the final recheck is rejected. Drift landing in the final-check-to-rename window is not detectable with this portable path-based design.
 
-The create-if-missing path is stronger: on POSIX it uses atomic create-if-absent semantics so two racing creators do not silently overwrite each other.
+The create-if-missing path is stronger: on POSIX it uses a hard-link operation for atomic create-if-absent semantics so two racing creators do not silently overwrite each other. This requires a target filesystem that supports hard links. Filesystems or mounts that reject hard-link creation fail closed before the destination is committed; v0.1 does not fall back to a weaker create path.
 
 ## Why agents need this
 
@@ -172,7 +172,7 @@ python -m pip install -e .
 python -m pytest
 ```
 
-The tests include deterministic drift injection, an explicit final-window lost-update limitation test, racing create-if-absent writers, post-commit failure semantics, symlink rejection, allowed-root checks, mode preservation, CLI receipts, stable error codes, and verified read-back.
+The tests include deterministic drift injection, an explicit final-window lost-update limitation test, racing create-if-absent writers, deterministic `EEXIST` coverage for the atomic create branch, post-commit failure semantics, symlink rejection, allowed-root checks, mode preservation, CLI receipts, stable error codes, and verified read-back.
 
 ## License
 
