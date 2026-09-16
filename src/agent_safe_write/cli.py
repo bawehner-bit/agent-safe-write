@@ -8,10 +8,19 @@ import sys
 from .core import DriftDetected, SafeWriteError, fingerprint, plan_write, safe_write
 
 
+class CliUsageError(ValueError):
+    pass
+
+
+class JsonArgumentParser(argparse.ArgumentParser):
+    def error(self, message: str) -> None:
+        raise CliUsageError(message)
+
+
 def _parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
+    parser = JsonArgumentParser(
         prog="agent-safe-write",
-        description="Drift-aware atomic file writes for AI agents and automation.",
+        description="Verified POSIX file writes with a late drift recheck for AI agents and automation.",
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -31,12 +40,34 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _error_payload(status: str, code: str, reason: str) -> str:
-    return json.dumps({"status": status, "code": code, "reason": reason}, sort_keys=True)
+def _error_payload(
+    status: str,
+    code: str,
+    reason: str,
+    *,
+    committed: bool = False,
+) -> str:
+    return json.dumps(
+        {
+            "status": status,
+            "code": code,
+            "reason": reason,
+            "committed": committed,
+        },
+        sort_keys=True,
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = _parser().parse_args(argv)
+    try:
+        args = _parser().parse_args(argv)
+    except CliUsageError as exc:
+        print(
+            _error_payload("FAILED", "USAGE_ERROR", str(exc), committed=False),
+            file=sys.stderr,
+        )
+        return 64
+
     try:
         if args.command == "fingerprint":
             print(json.dumps(fingerprint(args.target).__dict__, indent=2, sort_keys=True))
@@ -44,19 +75,54 @@ def main(argv: list[str] | None = None) -> int:
 
         data = Path(args.source).read_bytes()
         if args.command == "plan":
-            receipt = plan_write(args.target, data, expected_sha256=args.expect, allowed_root=args.root)
+            receipt = plan_write(
+                args.target,
+                data,
+                expected_sha256=args.expect,
+                allowed_root=args.root,
+            )
         else:
-            receipt = safe_write(args.target, data, expected_sha256=args.expect, allowed_root=args.root)
+            receipt = safe_write(
+                args.target,
+                data,
+                expected_sha256=args.expect,
+                allowed_root=args.root,
+            )
         print(receipt.to_json())
         return 0
     except DriftDetected as exc:
-        print(_error_payload("NEEDS_REVIEW", exc.code, str(exc)), file=sys.stderr)
+        print(
+            _error_payload(
+                "NEEDS_REVIEW",
+                exc.code,
+                str(exc),
+                committed=exc.committed,
+            ),
+            file=sys.stderr,
+        )
         return 3
     except SafeWriteError as exc:
-        print(_error_payload("FAILED", exc.code, str(exc)), file=sys.stderr)
+        print(
+            _error_payload(
+                "FAILED",
+                exc.code,
+                str(exc),
+                committed=exc.committed,
+            ),
+            file=sys.stderr,
+        )
         return 2
     except OSError as exc:
-        print(_error_payload("FAILED", "OS_ERROR", str(exc)), file=sys.stderr)
+        print(
+            _error_payload("FAILED", "OS_ERROR", str(exc), committed=False),
+            file=sys.stderr,
+        )
+        return 2
+    except Exception as exc:
+        print(
+            _error_payload("FAILED", "INTERNAL_ERROR", str(exc), committed=False),
+            file=sys.stderr,
+        )
         return 2
 
 

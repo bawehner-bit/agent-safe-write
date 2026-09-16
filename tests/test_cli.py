@@ -38,6 +38,7 @@ def test_cli_apply_and_receipt(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stderr
     payload = json.loads(result.stdout)
     assert payload["status"] == "SUCCEEDED"
+    assert payload["committed"] is True
     assert target.read_text() == "after"
 
 
@@ -59,6 +60,7 @@ def test_cli_drift_exit_code(tmp_path: Path) -> None:
     payload = json.loads(result.stderr)
     assert payload["status"] == "NEEDS_REVIEW"
     assert payload["code"] == "DRIFT_DETECTED"
+    assert payload["committed"] is False
 
 
 def test_cli_outside_root_has_stable_error_code(tmp_path: Path) -> None:
@@ -81,3 +83,28 @@ def test_cli_outside_root_has_stable_error_code(tmp_path: Path) -> None:
     payload = json.loads(result.stderr)
     assert payload["status"] == "FAILED"
     assert payload["code"] == "TARGET_OUTSIDE_ROOT"
+    assert payload["committed"] is False
+
+
+def test_cli_usage_error_is_json_with_distinct_exit_code() -> None:
+    result = run_cli("apply", "target.txt")
+    assert result.returncode == 64
+    payload = json.loads(result.stderr)
+    assert payload["status"] == "FAILED"
+    assert payload["code"] == "USAGE_ERROR"
+    assert payload["committed"] is False
+
+
+def test_cli_missing_source_is_machine_readable(tmp_path: Path) -> None:
+    target = tmp_path / "target.txt"
+    result = run_cli(
+        "apply",
+        str(target),
+        "--from-file",
+        str(tmp_path / "missing-source.txt"),
+    )
+    assert result.returncode == 2
+    payload = json.loads(result.stderr)
+    assert payload["status"] == "FAILED"
+    assert payload["code"] == "OS_ERROR"
+    assert payload["committed"] is False

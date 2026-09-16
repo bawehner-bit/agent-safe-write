@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "agent-safe-write"
 version = "0.1.0"
-description = "Drift-aware atomic filesystem writes for AI agents and automation"
+description = "Drift-aware verified filesystem writes for AI agents and automation"
 readme = "README.md"
 requires-python = ">=3.11"
 license = {text = "Apache-2.0"}
@@ -14,6 +14,7 @@ keywords = ["ai-agents", "atomic-write", "codex", "developer-tools", "safety", "
 classifiers = [
   "Development Status :: 3 - Alpha",
   "License :: OSI Approved :: Apache Software License",
+  "Operating System :: POSIX",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3 :: Only",
   "Topic :: Software Development :: Libraries :: Python Modules",
