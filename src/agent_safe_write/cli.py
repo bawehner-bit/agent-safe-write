@@ -31,6 +31,10 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _error_payload(status: str, code: str, reason: str) -> str:
+    return json.dumps({"status": status, "code": code, "reason": reason}, sort_keys=True)
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
@@ -46,13 +50,13 @@ def main(argv: list[str] | None = None) -> int:
         print(receipt.to_json())
         return 0
     except DriftDetected as exc:
-        print(json.dumps({"status": "NEEDS_REVIEW", "reason": str(exc)}, sort_keys=True), file=sys.stderr)
+        print(_error_payload("NEEDS_REVIEW", exc.code, str(exc)), file=sys.stderr)
         return 3
     except SafeWriteError as exc:
-        print(json.dumps({"status": "FAILED", "reason": str(exc)}, sort_keys=True), file=sys.stderr)
+        print(_error_payload("FAILED", exc.code, str(exc)), file=sys.stderr)
         return 2
     except OSError as exc:
-        print(json.dumps({"status": "FAILED", "reason": str(exc)}, sort_keys=True), file=sys.stderr)
+        print(_error_payload("FAILED", "OS_ERROR", str(exc)), file=sys.stderr)
         return 2
 
 
