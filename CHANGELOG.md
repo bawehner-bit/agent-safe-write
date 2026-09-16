@@ -10,4 +10,5 @@ Initial public release candidate:
 - post-write read-back SHA-256 verification;
 - symlink and allowed-root guards;
 - CLI plans, applies, fingerprints, and JSON receipts;
-- regression tests for stale plans and concurrent drift.
+- stable machine-readable error codes for failure receipts;
+- regression tests for stale plans, concurrent drift, and safety error classes.
