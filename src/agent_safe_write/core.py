@@ -20,15 +20,25 @@ class WriteStatus(str, Enum):
 
 
 class SafeWriteError(RuntimeError):
-    """Base class for safe-write failures."""
+    """Base class for safe-write failures with a stable machine-readable code."""
+
+    default_code = "SAFE_WRITE_ERROR"
+
+    def __init__(self, message: str, *, code: str | None = None) -> None:
+        super().__init__(message)
+        self.code = code or self.default_code
 
 
 class DriftDetected(SafeWriteError):
     """Raised when the target changed between planning and commit."""
 
+    default_code = "DRIFT_DETECTED"
+
 
 class UnsafeTarget(SafeWriteError):
     """Raised when a path violates the write boundary."""
+
+    default_code = "UNSAFE_TARGET"
 
 
 @dataclass(frozen=True)
@@ -87,9 +97,11 @@ def sha256_bytes(data: bytes) -> str:
 def _read_regular_file(path: Path) -> bytes:
     st = os.lstat(path)
     if stat.S_ISLNK(st.st_mode):
-        raise UnsafeTarget(f"refusing symlink target: {path}")
+        raise UnsafeTarget(f"refusing symlink target: {path}", code="SYMLINK_TARGET")
     if not stat.S_ISREG(st.st_mode):
-        raise UnsafeTarget(f"target is not a regular file: {path}")
+        raise UnsafeTarget(
+            f"target is not a regular file: {path}", code="TARGET_NOT_REGULAR_FILE"
+        )
     with path.open("rb") as handle:
         return handle.read()
 
@@ -102,9 +114,11 @@ def fingerprint(path: str | os.PathLike[str]) -> Fingerprint:
         return Fingerprint(False, None, None, None, None, None, None, None, None)
 
     if stat.S_ISLNK(st.st_mode):
-        raise UnsafeTarget(f"refusing symlink target: {target}")
+        raise UnsafeTarget(f"refusing symlink target: {target}", code="SYMLINK_TARGET")
     if not stat.S_ISREG(st.st_mode):
-        raise UnsafeTarget(f"target is not a regular file: {target}")
+        raise UnsafeTarget(
+            f"target is not a regular file: {target}", code="TARGET_NOT_REGULAR_FILE"
+        )
 
     data = _read_regular_file(target)
     return Fingerprint(
@@ -128,7 +142,9 @@ def _validate_root(target: Path, allowed_root: Path | None) -> None:
     try:
         parent.relative_to(root)
     except ValueError as exc:
-        raise UnsafeTarget(f"target is outside allowed root: {target}") from exc
+        raise UnsafeTarget(
+            f"target is outside allowed root: {target}", code="TARGET_OUTSIDE_ROOT"
+        ) from exc
 
 
 def _assert_expected(observed: Fingerprint, expected_sha256: str | None) -> None:
@@ -174,7 +190,9 @@ def _preserve_owner(temp_path: Path, before: Fingerprint) -> None:
         # than surfacing the mismatch after replacement, so fail closed.
         st = os.stat(temp_path)
         if (st.st_uid, st.st_gid) != (before.uid, before.gid):
-            raise UnsafeTarget("cannot preserve target uid/gid")
+            raise UnsafeTarget(
+                "cannot preserve target uid/gid", code="OWNERSHIP_PRESERVATION_FAILED"
+            )
 
 
 def _fsync_directory(path: Path) -> None:
@@ -209,9 +227,11 @@ def safe_write(
 
     path = Path(target)
     if not path.name or path.name in {".", ".."}:
-        raise UnsafeTarget(f"invalid target: {path}")
+        raise UnsafeTarget(f"invalid target: {path}", code="INVALID_TARGET")
     if not path.parent.exists():
-        raise UnsafeTarget(f"parent directory does not exist: {path.parent}")
+        raise UnsafeTarget(
+            f"parent directory does not exist: {path.parent}", code="PARENT_MISSING"
+        )
 
     root = Path(allowed_root) if allowed_root is not None else None
     _validate_root(path, root)
@@ -241,7 +261,10 @@ def safe_write(
 
         after = fingerprint(path)
         if not after.exists or after.sha256 != desired_sha:
-            raise SafeWriteError("read-back verification failed after atomic replace")
+            raise SafeWriteError(
+                "read-back verification failed after atomic replace",
+                code="READBACK_VERIFICATION_FAILED",
+            )
 
         return WriteReceipt(
             version="agent-safe-write/0.1",
@@ -269,7 +292,9 @@ def plan_write(
 ) -> WriteReceipt:
     path = Path(target)
     if not path.parent.exists():
-        raise UnsafeTarget(f"parent directory does not exist: {path.parent}")
+        raise UnsafeTarget(
+            f"parent directory does not exist: {path.parent}", code="PARENT_MISSING"
+        )
     _validate_root(path, Path(allowed_root) if allowed_root is not None else None)
     before = fingerprint(path)
     _assert_expected(before, expected_sha256)
