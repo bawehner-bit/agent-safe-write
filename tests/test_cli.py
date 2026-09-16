@@ -56,4 +56,28 @@ def test_cli_drift_exit_code(tmp_path: Path) -> None:
         "f" * 64,
     )
     assert result.returncode == 3
-    assert json.loads(result.stderr)["status"] == "NEEDS_REVIEW"
+    payload = json.loads(result.stderr)
+    assert payload["status"] == "NEEDS_REVIEW"
+    assert payload["code"] == "DRIFT_DETECTED"
+
+
+def test_cli_outside_root_has_stable_error_code(tmp_path: Path) -> None:
+    allowed = tmp_path / "allowed"
+    outside = tmp_path / "outside"
+    allowed.mkdir()
+    outside.mkdir()
+    source = allowed / "source.txt"
+    source.write_text("desired")
+
+    result = run_cli(
+        "apply",
+        str(outside / "target.txt"),
+        "--from-file",
+        str(source),
+        "--root",
+        str(allowed),
+    )
+    assert result.returncode == 2
+    payload = json.loads(result.stderr)
+    assert payload["status"] == "FAILED"
+    assert payload["code"] == "TARGET_OUTSIDE_ROOT"
