@@ -104,6 +104,12 @@ print(receipt.status)  # SUCCEEDED only after read-back verification
 
 To create a new file, pass `expected_sha256=None`; creation fails if the file already exists.
 
+## Real dogfooding
+
+The package is already consumed by a separate private multi-agent operations repository maintained by the project author. There it protects the final write of a CI-generated contract-evidence artifact. Consumer tests verify both a normal `SUCCEEDED` write and a stale-hash attempt that returns `DRIFT_DETECTED` without overwriting the newer state.
+
+This is disclosed as **first-party dogfooding, not third-party adoption**. See [`docs/DOGFOODING.md`](docs/DOGFOODING.md) for the sanitized evidence and limitations.
+
 ## Threat model and non-claims
 
 This library reduces accidental lost updates and false-success reporting for cooperative local automation. It is **not** a sandbox, permission system, malware defense, distributed lock, or cryptographic attestation service. A malicious process with direct filesystem access can bypass it. See [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md).
