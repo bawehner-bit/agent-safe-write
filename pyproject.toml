@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agent-safe-write"
+version = "0.1.0"
+description = "Drift-aware atomic filesystem writes for AI agents and automation"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "Apache-2.0"}
+authors = [{name = "Bastian Wehner"}]
+keywords = ["ai-agents", "atomic-write", "codex", "developer-tools", "safety", "verification"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+[project.scripts]
+agent-safe-write = "agent_safe_write.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/bawehner-bit/agent-safe-write"
+Issues = "https://github.com/bawehner-bit/agent-safe-write/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
