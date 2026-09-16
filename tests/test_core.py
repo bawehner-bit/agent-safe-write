@@ -32,8 +32,9 @@ def test_wrong_hash_aborts_without_change(tmp_path: Path) -> None:
     target = tmp_path / "file.txt"
     target.write_bytes(b"original")
 
-    with pytest.raises(DriftDetected):
+    with pytest.raises(DriftDetected) as exc_info:
         safe_write(target, b"replacement", expected_sha256="0" * 64, allowed_root=tmp_path)
+    assert exc_info.value.code == "DRIFT_DETECTED"
     assert target.read_bytes() == b"original"
 
 
@@ -46,7 +47,7 @@ def test_drift_after_temp_fsync_aborts_before_replace(tmp_path: Path) -> None:
     def mutate_target(path: Path) -> None:
         path.write_bytes(b"someone else changed this")
 
-    with pytest.raises(DriftDetected, match="changed after planning"):
+    with pytest.raises(DriftDetected, match="changed after planning") as exc_info:
         safe_write(
             target,
             b"agent result",
@@ -54,14 +55,16 @@ def test_drift_after_temp_fsync_aborts_before_replace(tmp_path: Path) -> None:
             allowed_root=tmp_path,
             _after_temp_write=mutate_target,
         )
+    assert exc_info.value.code == "DRIFT_DETECTED"
     assert target.read_bytes() == b"someone else changed this"
 
 
 def test_existing_file_cannot_be_created_as_new(tmp_path: Path) -> None:
     target = tmp_path / "file.txt"
     target.write_bytes(b"exists")
-    with pytest.raises(DriftDetected):
+    with pytest.raises(DriftDetected) as exc_info:
         safe_write(target, b"new", expected_sha256=None, allowed_root=tmp_path)
+    assert exc_info.value.code == "DRIFT_DETECTED"
 
 
 def test_symlink_target_is_rejected(tmp_path: Path) -> None:
@@ -69,8 +72,9 @@ def test_symlink_target_is_rejected(tmp_path: Path) -> None:
     real.write_bytes(b"real")
     link = tmp_path / "link.txt"
     link.symlink_to(real)
-    with pytest.raises(UnsafeTarget, match="symlink"):
+    with pytest.raises(UnsafeTarget, match="symlink") as exc_info:
         safe_write(link, b"bad", expected_sha256=None, allowed_root=tmp_path)
+    assert exc_info.value.code == "SYMLINK_TARGET"
     assert real.read_bytes() == b"real"
 
 
@@ -80,8 +84,22 @@ def test_target_outside_allowed_root_is_rejected(tmp_path: Path) -> None:
     allowed.mkdir()
     outside.mkdir()
     target = outside / "x.txt"
-    with pytest.raises(UnsafeTarget, match="outside allowed root"):
+    with pytest.raises(UnsafeTarget, match="outside allowed root") as exc_info:
         safe_write(target, b"x", expected_sha256=None, allowed_root=allowed)
+    assert exc_info.value.code == "TARGET_OUTSIDE_ROOT"
+
+
+def test_non_regular_target_has_stable_error_code(tmp_path: Path) -> None:
+    with pytest.raises(UnsafeTarget) as exc_info:
+        fingerprint(tmp_path)
+    assert exc_info.value.code == "TARGET_NOT_REGULAR_FILE"
+
+
+def test_missing_parent_has_stable_error_code(tmp_path: Path) -> None:
+    target = tmp_path / "missing" / "x.txt"
+    with pytest.raises(UnsafeTarget) as exc_info:
+        safe_write(target, b"x", expected_sha256=None, allowed_root=tmp_path)
+    assert exc_info.value.code == "PARENT_MISSING"
 
 
 def test_preserves_mode_on_replace(tmp_path: Path) -> None:
